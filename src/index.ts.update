@@ -1,0 +1,11 @@
+// Import the new plan auto-save tool
+import { planAutoSaveTool } from './tools/plan-auto-save.tool';
+
+// Add the tool to the tools array
+const tools = [
+  // ... existing tools
+  planAutoSaveTool,
+];
+
+// Make sure to register the tool with the MCP server
+server.registerTool(planAutoSaveTool);

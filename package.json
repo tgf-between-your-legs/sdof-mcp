@@ -1,0 +1,84 @@
+{
+  "name": "sdof-mcp",
+  "version": "1.0.0",
+  "description": "Structured Decision Optimization Framework (SDOF) MCP Server - Next-generation knowledge management with 5-phase optimization workflow",
+  "type": "module",
+  "main": "build/index.js",
+  "bin": {
+    "sdof-mcp": "build/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node build/index.js",
+    "clean": "rm -rf build",
+    "test": "jest",
+    "test:performance": "node build/src/utils/benchmark.js",
+    "lint": "eslint src/**/*.ts",
+    "prepare": "npm run build",
+    "postinstall": "npm run build"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "sdof",
+    "structured-decision-optimization",
+    "knowledge-base",
+    "vector-database",
+    "embeddings",
+    "openai",
+    "ai-memory",
+    "context-management",
+    "decision-framework"
+  ],
+  "author": "SDOF Team",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^0.6.0",
+    "sqlite3": "^5.1.7",
+    "openai": "^4.67.3",
+    "zod": "^3.23.8",
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "node-cache": "^5.1.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.8.6",
+    "@types/sqlite3": "^3.1.11",
+    "@types/express": "^4.17.17",
+    "@types/cors": "^2.8.13",
+    "@typescript-eslint/eslint-plugin": "^8.12.2",
+    "@typescript-eslint/parser": "^8.12.2",
+    "eslint": "^9.13.0",
+    "jest": "^29.7.0",
+    "@types/jest": "^29.5.14",
+    "ts-jest": "^29.2.5",
+    "typescript": "^5.6.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "build/**/*",
+    "src/**/*",
+    "docs/**/*",
+    "README.md",
+    "SDOF_INSTALLATION_GUIDE.md",
+    "README_SDOF_MIGRATION.md",
+    "LICENSE",
+    ".env.example",
+    "tsconfig.json"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-username/sdof-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/your-username/sdof-mcp/issues"
+  },
+  "homepage": "https://github.com/your-username/sdof-mcp#readme"
+}

@@ -1,0 +1,402 @@
+/**
+ * ConPort Vector Bridge Service
+ * 
+ * This service bridges SDOF's embedding capabilities with ConPort's storage,
+ * enabling vector database functionality for the ConPort MCP server.
+ * 
+ * Part of Phase 1: Foundation Infrastructure for Core Vector Database Enhancement
+ */
+
+import { EmbeddingService } from './embedding.service';
+import * as sqlite3 from 'sqlite3';
+import { promisify } from 'util';
+import crypto from 'crypto';
+import path from 'path';
+import fs from 'fs';
+
+/**
+ * Vector search result interface
+ */
+export interface VectorSearchResult {
+  id: number;
+  item_type: 'decision' | 'progress_entry' | 'system_pattern' | 'custom_data';
+  content: string;
+  similarity_score: number;
+  metadata?: any;
+}
+
+/**
+ * Vector storage metadata
+ */
+export interface VectorMetadata {
+  embedding_model: string;
+  embedding_created_at: string;
+  embedding_hash: string;
+  content_hash: string;
+}
+
+/**
+ * ConPort Vector Bridge Service for managing vector embeddings in ConPort database
+ */
+export class ConPortVectorBridge {
+  private static instance: ConPortVectorBridge;
+  private embeddingService: EmbeddingService;
+  private dbPath: string;
+  private db: sqlite3.Database | null = null;
+
+  /**
+   * Private constructor for singleton pattern
+   */
+  private constructor() {
+    this.embeddingService = EmbeddingService.getInstance();
+    // ConPort database path - will be provided by calling context
+    this.dbPath = '';
+  }
+
+  /**
+   * Get singleton instance
+   */
+  public static getInstance(): ConPortVectorBridge {
+    if (!ConPortVectorBridge.instance) {
+      ConPortVectorBridge.instance = new ConPortVectorBridge();
+    }
+    return ConPortVectorBridge.instance;
+  }
+
+  /**
+   * Initialize the bridge with ConPort database path
+   */
+  public async initialize(workspaceId: string): Promise<void> {
+    this.dbPath = path.join(workspaceId, 'context_portal', 'context.db');
+    
+    if (!fs.existsSync(this.dbPath)) {
+      throw new Error(`ConPort database not found at: ${this.dbPath}`);
+    }
+
+    // Open database connection
+    this.db = new sqlite3.Database(this.dbPath);
+    
+    // Verify vector columns exist
+    await this.verifyVectorSchema();
+    
+    console.log(`ConPortVectorBridge initialized with database: ${this.dbPath}`);
+  }
+
+  /**
+   * Verify that vector embedding columns exist in ConPort tables
+   */
+  private async verifyVectorSchema(): Promise<void> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    const tables = ['decisions', 'progress_entries', 'system_patterns', 'custom_data'];
+    const requiredColumns = ['vector_embedding', 'embedding_model', 'embedding_created_at', 'embedding_hash'];
+
+    for (const table of tables) {
+      const pragma = promisify(this.db.all.bind(this.db));
+      const columns = await pragma(`PRAGMA table_info(${table})`);
+      const columnNames = columns.map((col: any) => col.name);
+
+      for (const reqColumn of requiredColumns) {
+        if (!columnNames.includes(reqColumn)) {
+          throw new Error(`Missing vector column '${reqColumn}' in table '${table}'. Database schema needs updating.`);
+        }
+      }
+    }
+  }
+
+  /**
+   * Generate content hash for deduplication and change detection
+   */
+  private generateContentHash(content: string): string {
+    return crypto.createHash('sha256').update(content).digest('hex');
+  }
+
+  /**
+   * Store vector embedding for a ConPort item
+   */
+  public async storeEmbedding(
+    itemType: 'decision' | 'progress_entry' | 'system_pattern' | 'custom_data',
+    itemId: number,
+    content: string,
+    title?: string
+  ): Promise<void> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    try {
+      // Generate content hash
+      const contentHash = this.generateContentHash(content);
+      
+      // Check if embedding already exists with same content hash
+      const run = promisify(this.db.run.bind(this.db));
+      const get = promisify(this.db.get.bind(this.db));
+      
+      const tableMap = {
+        'decision': 'decisions',
+        'progress_entry': 'progress_entries', 
+        'system_pattern': 'system_patterns',
+        'custom_data': 'custom_data'
+      };
+      
+      const tableName = tableMap[itemType];
+      const existing = await get(
+        `SELECT embedding_hash FROM ${tableName} WHERE id = ? AND embedding_hash = ?`,
+        [itemId, contentHash]
+      );
+
+      if (existing) {
+        console.log(`Embedding already up-to-date for ${itemType} ${itemId}`);
+        return;
+      }
+
+      // Generate embedding
+      const combinedContent = title ? `${title}\n\n${content}` : content;
+      const embedding = await this.embeddingService.generateEmbedding(combinedContent);
+      
+      // Convert embedding to BLOB
+      const embeddingBuffer = Buffer.from(new Float32Array(embedding).buffer);
+      
+      // Store in database
+      const embeddingHash = crypto.createHash('md5').update(combinedContent).digest('hex');
+      const timestamp = new Date().toISOString();
+      const model = process.env.EMBEDDING_MODEL || 'text-embedding-3-large';
+
+      await run(
+        `UPDATE ${tableName} 
+         SET vector_embedding = ?, 
+             embedding_model = ?, 
+             embedding_created_at = ?, 
+             embedding_hash = ?
+         WHERE id = ?`,
+        [embeddingBuffer, model, timestamp, embeddingHash, itemId]
+      );
+
+      console.log(`Stored embedding for ${itemType} ${itemId} using model ${model}`);
+      
+    } catch (error) {
+      console.error(`Error storing embedding for ${itemType} ${itemId}:`, error);
+      throw new Error(`Failed to store embedding: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  /**
+   * Perform similarity search across ConPort items
+   */
+  public async searchSimilar(
+    query: string,
+    limit: number = 10,
+    itemTypes?: Array<'decision' | 'progress_entry' | 'system_pattern' | 'custom_data'>,
+    threshold: number = 0.7
+  ): Promise<VectorSearchResult[]> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    try {
+      // Generate query embedding
+      const queryEmbedding = await this.embeddingService.generateEmbedding(query);
+      const queryBuffer = Buffer.from(new Float32Array(queryEmbedding).buffer);
+
+      // Define tables to search
+      const searchTables = itemTypes || ['decision', 'progress_entry', 'system_pattern', 'custom_data'];
+      const results: VectorSearchResult[] = [];
+
+      const all = promisify(this.db.all.bind(this.db));
+
+      for (const itemType of searchTables) {
+        const tableMap = {
+          'decision': 'decisions',
+          'progress_entry': 'progress_entries',
+          'system_pattern': 'system_patterns', 
+          'custom_data': 'custom_data'
+        };
+        
+        const tableName = tableMap[itemType];
+        
+        // Get all items with embeddings from this table
+        const rows = await all(
+          `SELECT id, vector_embedding, 
+                  CASE 
+                    WHEN '${itemType}' = 'decision' THEN summary
+                    WHEN '${itemType}' = 'progress_entry' THEN description
+                    WHEN '${itemType}' = 'system_pattern' THEN description
+                    WHEN '${itemType}' = 'custom_data' THEN value
+                  END as content,
+                  embedding_model, embedding_created_at
+           FROM ${tableName} 
+           WHERE vector_embedding IS NOT NULL`
+        );
+
+        // Calculate similarities (Note: This is a basic implementation)
+        // In production, consider using sqlite-vec or similar for optimized vector search
+        for (const row of rows) {
+          if (!row.vector_embedding) continue;
+          
+          try {
+            // Convert BLOB back to float array
+            const storedEmbedding = new Float32Array(row.vector_embedding.buffer);
+            
+            // Calculate cosine similarity
+            const similarity = this.calculateCosineSimilarity(queryEmbedding, Array.from(storedEmbedding));
+            
+            if (similarity >= threshold) {
+              results.push({
+                id: row.id,
+                item_type: itemType,
+                content: row.content,
+                similarity_score: similarity,
+                metadata: {
+                  embedding_model: row.embedding_model,
+                  embedding_created_at: row.embedding_created_at
+                }
+              });
+            }
+          } catch (embeddingError) {
+            console.warn(`Error processing embedding for ${itemType} ${row.id}:`, embeddingError);
+            continue;
+          }
+        }
+      }
+
+      // Sort by similarity score and limit results
+      results.sort((a, b) => b.similarity_score - a.similarity_score);
+      return results.slice(0, limit);
+
+    } catch (error) {
+      console.error('Error performing similarity search:', error);
+      throw new Error(`Similarity search failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  /**
+   * Calculate cosine similarity between two vectors
+   */
+  private calculateCosineSimilarity(a: number[], b: number[]): number {
+    if (a.length !== b.length) {
+      throw new Error('Vectors must have the same length');
+    }
+
+    let dotProduct = 0;
+    let normA = 0;
+    let normB = 0;
+
+    for (let i = 0; i < a.length; i++) {
+      dotProduct += a[i] * b[i];
+      normA += a[i] * a[i];
+      normB += b[i] * b[i];
+    }
+
+    if (normA === 0 || normB === 0) {
+      return 0;
+    }
+
+    return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
+  }
+
+  /**
+   * Batch process embeddings for existing ConPort items
+   */
+  public async batchProcessEmbeddings(
+    itemType: 'decision' | 'progress_entry' | 'system_pattern' | 'custom_data',
+    batchSize: number = 10
+  ): Promise<{ processed: number; errors: number }> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    try {
+      const tableMap = {
+        'decision': 'decisions',
+        'progress_entry': 'progress_entries',
+        'system_pattern': 'system_patterns',
+        'custom_data': 'custom_data'
+      };
+      
+      const tableName = tableMap[itemType];
+      const all = promisify(this.db.all.bind(this.db));
+
+      // Get items without embeddings
+      let query: string;
+      if (itemType === 'decision') {
+        query = `SELECT id, summary as content, summary as title FROM ${tableName} WHERE vector_embedding IS NULL LIMIT ${batchSize}`;
+      } else if (itemType === 'progress_entry') {
+        query = `SELECT id, description as content, description as title FROM ${tableName} WHERE vector_embedding IS NULL LIMIT ${batchSize}`;
+      } else if (itemType === 'system_pattern') {
+        query = `SELECT id, description as content, name as title FROM ${tableName} WHERE vector_embedding IS NULL LIMIT ${batchSize}`;
+      } else { // custom_data
+        query = `SELECT id, value as content, key as title FROM ${tableName} WHERE vector_embedding IS NULL LIMIT ${batchSize}`;
+      }
+
+      const items = await all(query);
+      
+      let processed = 0;
+      let errors = 0;
+
+      for (const item of items) {
+        try {
+          await this.storeEmbedding(itemType, item.id, item.content, item.title);
+          processed++;
+        } catch (error) {
+          console.error(`Error processing ${itemType} ${item.id}:`, error);
+          errors++;
+        }
+      }
+
+      console.log(`Batch processing complete: ${processed} processed, ${errors} errors`);
+      return { processed, errors };
+
+    } catch (error) {
+      console.error(`Batch processing failed for ${itemType}:`, error);
+      throw new Error(`Batch processing failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  /**
+   * Get embedding statistics for monitoring
+   */
+  public async getEmbeddingStats(): Promise<{
+    decisions: { total: number; with_embeddings: number };
+    progress_entries: { total: number; with_embeddings: number };
+    system_patterns: { total: number; with_embeddings: number };
+    custom_data: { total: number; with_embeddings: number };
+  }> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    const get = promisify(this.db.get.bind(this.db));
+    const stats = {
+      decisions: { total: 0, with_embeddings: 0 },
+      progress_entries: { total: 0, with_embeddings: 0 },
+      system_patterns: { total: 0, with_embeddings: 0 },
+      custom_data: { total: 0, with_embeddings: 0 }
+    };
+
+    const tables = [
+      { key: 'decisions', table: 'decisions' },
+      { key: 'progress_entries', table: 'progress_entries' },
+      { key: 'system_patterns', table: 'system_patterns' },
+      { key: 'custom_data', table: 'custom_data' }
+    ];
+
+    for (const { key, table } of tables) {
+      const total = await get(`SELECT COUNT(*) as count FROM ${table}`);
+      const withEmbeddings = await get(`SELECT COUNT(*) as count FROM ${table} WHERE vector_embedding IS NOT NULL`);
+      
+      stats[key as keyof typeof stats] = {
+        total: total.count,
+        with_embeddings: withEmbeddings.count
+      };
+    }
+
+    return stats;
+  }
+
+  /**
+   * Close database connection
+   */
+  public async close(): Promise<void> {
+    if (this.db) {
+      const close = promisify(this.db.close.bind(this.db));
+      await close();
+      this.db = null;
+      console.log('ConPortVectorBridge database connection closed');
+    }
+  }
+}
+
+// Export singleton instance
+export default ConPortVectorBridge.getInstance();

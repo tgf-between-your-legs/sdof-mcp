@@ -1,0 +1,40 @@
+#!/usr/bin/env node
+/**
+ * SDOF Knowledge Base MCP Server
+ * 
+ * This is the main entry point for the SDOF Knowledge Base MCP server.
+ * It sets up the server with tools for managing the knowledge base and
+ * performing semantic searches.
+ */
+
+import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import {
+  CallToolRequestSchema,
+  ErrorCode,
+  ListToolsRequestSchema,
+  McpError,
+} from '@modelcontextprotocol/sdk/types.js';
+import dotenv from 'dotenv';
+import databaseService from './services/database.service';
+import embeddingService from './services/embedding.service';
+import { IKnowledgeEntry } from './models/knowledge-entry.model';
+
+// Import plan auto-save service (added after the module is created)
+// This import will work once the file is properly created and compiled
+// We'll handle the import conditionally to prevent errors during development
+let planAutoSaveService: any = null;
+try {
+  // Dynamic import to prevent compilation errors if the module doesn't exist yet
+  const PlanAutoSaveModule = require('./services/plan-auto-save.service');
+  if (PlanAutoSaveModule && PlanAutoSaveModule.PlanAutoSaveService) {
+    planAutoSaveService = PlanAutoSaveModule.PlanAutoSaveService.getInstance();
+  }
+} catch (error) {
+  console.warn('Plan auto-save service not available:', error);
+}
+
+// Load environment variables
+dotenv.config();
+
+// Rest of the index.ts file continues as before...
