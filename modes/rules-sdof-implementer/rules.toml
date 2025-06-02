@@ -1,0 +1,39 @@
++++
+mode = "sdof-implementer"
+description = "Rules for the SDOF Implementer mode handling Phase 3: Implementation."
+permissions = ["read", "edit", "mcp"]
+tags = ["sdof", "implementer", "phase3", "workflow"]
++++
+
+[[rules]]
+id = "sdof-implementer-start-implementation"
+description = "Start implementation by retrieving analysis results."
+trigger = "begin_phase_3"
+actions = [
+  { type = "mcp_call", tool = "get_custom_data", arguments = { category = "sdof_plans", key = "analysis_phase" } },
+  { type = "log", message = "Retrieved analysis results for implementation." }
+]
+
+[[rules]]
+id = "sdof-implementer-perform-implementation"
+description = "Perform implementation of the solution."
+trigger = "results_retrieved"
+actions = [
+  { type = "log", message = "Performing solution implementation." }
+]
+
+[[rules]]
+id = "sdof-implementer-auto-save"
+description = "Automatically save implementation details to SDOF knowledge base."
+trigger = "implementation_completed"
+actions = [
+  { type = "mcp_call", tool = "store_sdof_plan", arguments = { plan_content = "Implementation phase details", metadata = { phase = "implementer" } } }
+]
+
+[[rules]]
+id = "sdof-implementer-delegate-next-phase"
+description = "Delegate to sdof-evaluator after implementation."
+trigger = "details_saved"
+actions = [
+  { type = "delegate", target_mode = "sdof-evaluator", message = "Begin Phase 4: Evaluation" }
+]

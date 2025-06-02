@@ -1,0 +1,72 @@
++++
+mode = "sdof-orchestrator"
+description = "Rules for the SDOF Orchestrator mode coordinating the 5-phase SDOF workflow."
+permissions = ["read", "edit", "mcp"]
+tags = ["sdof", "orchestrator", "workflow", "coordination"]
++++
+
+[[rules]]
+id = "sdof-orchestrator-delegate-phase-1"
+description = "Delegate Phase 1 to sdof-explorer and wait for completion."
+trigger = "start_workflow"
+actions = [
+  { type = "delegate", target_mode = "sdof-explorer", message = "Begin Phase 1: Solution Exploration" }
+]
+
+[[rules]]
+id = "sdof-orchestrator-delegate-phase-2"
+description = "Delegate Phase 2 to sdof-analyzer after Phase 1 completion."
+trigger = "phase_1_completed"
+actions = [
+  { type = "delegate", target_mode = "sdof-analyzer", message = "Begin Phase 2: Detailed Analysis" }
+]
+
+[[rules]]
+id = "sdof-orchestrator-delegate-phase-3"
+description = "Delegate Phase 3 to sdof-implementer after Phase 2 completion."
+trigger = "phase_2_completed"
+actions = [
+  { type = "delegate", target_mode = "sdof-implementer", message = "Begin Phase 3: Implementation" }
+]
+
+[[rules]]
+id = "sdof-orchestrator-delegate-phase-4"
+description = "Delegate Phase 4 to sdof-evaluator after Phase 3 completion."
+trigger = "phase_3_completed"
+actions = [
+  { type = "delegate", target_mode = "sdof-evaluator", message = "Begin Phase 4: Evaluation" }
+]
+
+[[rules]]
+id = "sdof-orchestrator-delegate-phase-5"
+description = "Delegate Phase 5 to sdof-integrator after Phase 4 completion."
+trigger = "phase_4_completed"
+actions = [
+  { type = "delegate", target_mode = "sdof-integrator", message = "Begin Phase 5: Integration and Learning" }
+]
+
+[[rules]]
+id = "sdof-orchestrator-complete-workflow"
+description = "Log completion and optionally restart or end workflow after Phase 5."
+trigger = "phase_5_completed"
+actions = [
+  { type = "log", message = "SDOF workflow completed successfully." },
+  { type = "delegate", target_mode = "sdof-orchestrator", message = "Restarting SDOF workflow." }
+]
+
+[[rules]]
+id = "sdof-orchestrator-auto-save"
+description = "Automatically save plan to SDOF knowledge base after each phase completion."
+trigger = ["phase_1_completed", "phase_2_completed", "phase_3_completed", "phase_4_completed", "phase_5_completed"]
+actions = [
+  { type = "mcp_call", tool = "store_sdof_plan", arguments = { plan_content = "Current phase plan data", metadata = { phase = "current_phase" } } }
+]
+
+[[rules]]
+id = "sdof-orchestrator-rag-integration"
+description = "Integrate RAG context retrieval with SDOF Knowledge Base for enhanced context."
+trigger = "start_workflow"
+actions = [
+  { type = "mcp_call", tool = "get_product_context", arguments = {} },
+  { type = "mcp_call", tool = "get_active_context", arguments = {} }
+]

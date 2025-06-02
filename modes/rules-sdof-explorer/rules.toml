@@ -1,0 +1,40 @@
++++
+mode = "sdof-explorer"
+description = "Rules for the SDOF Explorer mode handling Phase 1: Solution Exploration."
+permissions = ["read", "edit", "mcp"]
+tags = ["sdof", "explorer", "phase1", "workflow"]
++++
+
+[[rules]]
+id = "sdof-explorer-start-exploration"
+description = "Start solution exploration and gather project context."
+trigger = "begin_phase_1"
+actions = [
+  { type = "mcp_call", tool = "get_product_context", arguments = {} },
+  { type = "mcp_call", tool = "get_active_context", arguments = {} },
+  { type = "log", message = "Gathered project context for exploration." }
+]
+
+[[rules]]
+id = "sdof-explorer-generate-plans"
+description = "Generate initial solution plans."
+trigger = "context_gathered"
+actions = [
+  { type = "log", message = "Generating initial solution plans." }
+]
+
+[[rules]]
+id = "sdof-explorer-auto-save"
+description = "Automatically save exploration plans to SDOF knowledge base."
+trigger = "plans_generated"
+actions = [
+  { type = "mcp_call", tool = "store_sdof_plan", arguments = { plan_content = "Exploration phase plans", metadata = { phase = "explorer" } } }
+]
+
+[[rules]]
+id = "sdof-explorer-delegate-next-phase"
+description = "Delegate to sdof-analyzer after exploration."
+trigger = "plans_saved"
+actions = [
+  { type = "delegate", target_mode = "sdof-analyzer", message = "Begin Phase 2: Detailed Analysis" }
+]

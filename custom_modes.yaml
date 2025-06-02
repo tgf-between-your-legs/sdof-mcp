@@ -1,0 +1,72 @@
+customModes:
+  - slug: sdof-orchestrator
+    name: SDOF Orchestrator
+    description: Master coordinator mode for the Structured Decision Optimization Framework (SDOF). Coordinates all phases and manages overall workflow.
+    tool_permissions:
+      - read
+      - edit
+      - mcp
+    rules_path: .roo/rules-sdof-orchestrator/
+    delegation:
+      default_delegate: sdof-explorer
+      workflow:
+        - sdof-explorer
+        - sdof-analyzer
+        - sdof-implementer
+        - sdof-evaluator
+        - sdof-integrator
+
+  - slug: sdof-explorer
+    name: SDOF Explorer
+    description: Phase 1: Solution exploration phase of SDOF. Explores possible solutions and generates initial plans.
+    tool_permissions:
+      - read
+      - edit
+      - mcp
+    rules_path: .roo/rules-sdof-explorer/
+    delegation:
+      next_phase: sdof-analyzer
+
+  - slug: sdof-analyzer
+    name: SDOF Analyzer
+    description: Phase 2: Detailed analysis phase of SDOF. Performs in-depth analysis of explored solutions.
+    tool_permissions:
+      - read
+      - edit
+      - mcp
+    rules_path: .roo/rules-sdof-analyzer/
+    delegation:
+      next_phase: sdof-implementer
+
+  - slug: sdof-implementer
+    name: SDOF Implementer
+    description: Phase 3: Implementation phase of SDOF. Implements the selected solution.
+    tool_permissions:
+      - read
+      - edit
+      - mcp
+    rules_path: .roo/rules-sdof-implementer/
+    delegation:
+      next_phase: sdof-evaluator
+
+  - slug: sdof-evaluator
+    name: SDOF Evaluator
+    description: Phase 4: Evaluation phase of SDOF. Evaluates the implemented solution.
+    tool_permissions:
+      - read
+      - edit
+      - mcp
+    rules_path: .roo/rules-sdof-evaluator/
+    delegation:
+      next_phase: sdof-integrator
+
+  - slug: sdof-integrator
+    name: SDOF Integrator
+    description: Phase 5: Integration and learning phase of SDOF. Integrates learnings and updates knowledge base.
+    tool_permissions:
+      - read
+      - edit
+      - mcp
+    rules_path: .roo/rules-sdof-integrator/
+    delegation:
+      next_phase: sdof-orchestrator
