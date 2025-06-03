@@ -1,0 +1,39 @@
++++
+mode = "sdof-integrator"
+description = "Rules for the SDOF Integrator mode handling Phase 5: Integration and Learning."
+permissions = ["read", "edit", "mcp"]
+tags = ["sdof", "integrator", "phase5", "workflow"]
++++
+
+[[rules]]
+id = "sdof-integrator-start-integration"
+description = "Start integration by retrieving evaluation results."
+trigger = "begin_phase_5"
+actions = [
+  { type = "mcp_call", tool = "get_custom_data", arguments = { category = "sdof_plans", key = "evaluation_phase" } },
+  { type = "log", message = "Retrieved evaluation results for integration." }
+]
+
+[[rules]]
+id = "sdof-integrator-perform-integration"
+description = "Integrate learnings and update knowledge base."
+trigger = "results_retrieved"
+actions = [
+  { type = "log", message = "Integrating learnings into knowledge base." }
+]
+
+[[rules]]
+id = "sdof-integrator-auto-save"
+description = "Automatically save integration results to SDOF knowledge base."
+trigger = "integration_completed"
+actions = [
+  { type = "mcp_call", tool = "store_sdof_plan", arguments = { plan_content = "Integration phase results", metadata = { phase = "integrator" } } }
+]
+
+[[rules]]
+id = "sdof-integrator-delegate-next-phase"
+description = "Delegate back to sdof-orchestrator or conclude workflow."
+trigger = "results_saved"
+actions = [
+  { type = "delegate", target_mode = "sdof-orchestrator", message = "SDOF workflow cycle complete. Ready for next iteration or conclusion." }
+]

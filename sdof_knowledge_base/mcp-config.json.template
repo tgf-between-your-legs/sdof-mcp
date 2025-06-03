@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "sdof_knowledge_base": {
+      "command": "node",
+      "args": ["[REPLACE_WITH_YOUR_PATH]/sdof_knowledge_base/build/index.js"],
+      "env": {
+        "OPENAI_API_KEY": "[YOUR_OPENAI_API_KEY]",
+        "EMBEDDING_SERVICE": "openai",
+        "EMBEDDING_MODEL": "text-embedding-3-small"
+      },
+      "disabled": false,
+      "timeout": 60,
+      "alwaysAllow": []
+    }
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "sdof_knowledge_base": {
+      "command": "cd",
+      "args": ["C:\\Users\\thegr\\integration-main\\integration\\sdof_knowledge_base", "&&", "npm", "start"],
+      "disabled": false
+    }
+  }
+}

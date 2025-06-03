@@ -1,0 +1,83 @@
+## Handling TypeScript Import Issues
+
+When implementing the plan auto-save functionality, you might encounter TypeScript errors related to importing the `PlanAutoSaveService`. This happens because TypeScript cannot find the module during compilation if you're adding the import before creating the actual file.
+
+### Solution:
+
+Instead of directly importing the PlanAutoSaveService like this:
+
+```typescript
+import { PlanAutoSaveService } from './services/plan-auto-save.service';
+```
+
+Use this safer approach that handles the case where the module might not exist yet:
+
+```typescript
+// Import plan auto-save service (added after the module is created)
+// This import will work once the file is properly created and compiled
+let planAutoSaveService: any = null;
+try {
+  // Dynamic import to prevent compilation errors if the module doesn't exist yet
+  const PlanAutoSaveModule = require('./services/plan-auto-save.service');
+  if (PlanAutoSaveModule && PlanAutoSaveModule.PlanAutoSaveService) {
+    planAutoSaveService = PlanAutoSaveModule.PlanAutoSaveService.getInstance();
+  }
+} catch (error) {
+  console.warn('Plan auto-save service not available:', error);
+}
+```
+
+Then, when implementing the `handleStoreSdofPlan` method, check if the service is available:
+
+```typescript
+private async handleStoreSdofPlan(args: any) {
+  if (!isStoreSdofPlanArgs(args)) {
+    throw new McpError(
+      ErrorCode.InvalidParams,
+      'Invalid parameters for store_sdof_plan'
+    );
+  }
+
+  if (!planAutoSaveService) {
+    throw new McpError(
+      ErrorCode.InternalError,
+      'Plan auto-save service is not available'
+    );
+  }
+
+  try {
+    const result = await planAutoSaveService.savePlan(
+      args.title,
+      args.content,
+      args.planType,
+      args.tags || []
+    );
+    
+    return {
+      content: [
+        {
+          type: 'text',
+          text: `SDOF plan "${args.title}" successfully saved to ${result.filePath} and knowledge base with ID: ${result.entryId}`,
+        },
+      ],
+    };
+  } catch (error) {
+    console.error('Error saving SDOF plan:', error);
+    throw new McpError(
+      ErrorCode.InternalError,
+      `Failed to save SDOF plan: ${error instanceof Error ? error.message : String(error)}`
+    );
+  }
+}
+```
+
+This approach makes your code more resilient to build-time issues while still providing the functionality when the service is available.
+
+### Development Workflow:
+
+1. First, create and compile the `plan-auto-save.service.ts` file
+2. Then update the `index.ts` file with the conditional import shown above
+3. Implement the rest of the changes in the `index.ts.plan-auto-save-update` file
+4. Build the project with `npm run build`
+
+This ensures that TypeScript can properly resolve all dependencies during compilation.

@@ -1,0 +1,99 @@
+// Import the plan-auto-save service at the top of the file
+import { PlanAutoSaveService } from './services/plan-auto-save.service';
+
+// Add type definition for StoreSdofPlanArgs after the other type definitions (around line 70)
+type StoreSdofPlanArgs = {
+  title: string;
+  content: string;
+  planType: 'exploration' | 'analysis' | 'implementation' | 'evaluation' | 'integration' | 'synthesis';
+  tags?: string[];
+};
+
+// Add validation function for StoreSdofPlanArgs after the other validation functions (around line 126)
+const isStoreSdofPlanArgs = (args: any): args is StoreSdofPlanArgs =>
+  typeof args === 'object' &&
+  args !== null &&
+  typeof args.title === 'string' &&
+  typeof args.content === 'string' &&
+  (args.planType === 'exploration' ||
+   args.planType === 'analysis' ||
+   args.planType === 'implementation' ||
+   args.planType === 'evaluation' ||
+   args.planType === 'integration' ||
+   args.planType === 'synthesis') &&
+  (args.tags === undefined || Array.isArray(args.tags));
+
+// Add the store_sdof_plan tool to the tools array in the ListToolsRequestSchema handler (around line 387)
+{
+  name: 'store_sdof_plan',
+  description: 'Store an SDOF plan in the knowledge base and filesystem',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      title: {
+        type: 'string',
+        description: 'Title of the SDOF plan',
+      },
+      content: {
+        type: 'string',
+        description: 'Markdown content of the plan',
+      },
+      planType: {
+        type: 'string',
+        description: 'Type of SDOF plan',
+        enum: ['exploration', 'analysis', 'implementation', 'evaluation', 'integration', 'synthesis'],
+      },
+      tags: {
+        type: 'array',
+        items: {
+          type: 'string',
+        },
+        description: 'Tags for categorizing the plan',
+      },
+    },
+    required: ['title', 'content', 'planType'],
+  },
+},
+
+// Add the case for store_sdof_plan in the switch statement (around line 425)
+case 'store_sdof_plan':
+  return await this.handleStoreSdofPlan(request.params.arguments);
+
+// Add the handleStoreSdofPlan method to the SdofKnowledgeBaseServer class (after the other handler methods)
+/**
+ * Handle store_sdof_plan tool
+ */
+private async handleStoreSdofPlan(args: any) {
+  if (!isStoreSdofPlanArgs(args)) {
+    throw new McpError(
+      ErrorCode.InvalidParams,
+      'Invalid parameters for store_sdof_plan'
+    );
+  }
+
+  try {
+    const planService = PlanAutoSaveService.getInstance();
+    
+    const result = await planService.savePlan(
+      args.title,
+      args.content,
+      args.planType,
+      args.tags || []
+    );
+    
+    return {
+      content: [
+        {
+          type: 'text',
+          text: `SDOF plan "${args.title}" successfully saved to ${result.filePath} and knowledge base with ID: ${result.entryId}`,
+        },
+      ],
+    };
+  } catch (error) {
+    console.error('Error saving SDOF plan:', error);
+    throw new McpError(
+      ErrorCode.InternalError,
+      `Failed to save SDOF plan: ${error instanceof Error ? error.message : String(error)}`
+    );
+  }
+}
